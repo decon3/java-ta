@@ -1,0 +1,20 @@
+spring:
+  security:
+    user:
+      name: user
+      password: abedd
+      roles: user
+server:
+  port: 9080
+logging:
+  level:
+    .: DEBUG
+    org.springframework: DEBUG
+    me.sk.ta: TRACE
+db:
+  current:
+    account-conn: "/db/current/account"
+    trade-conn: "/db/current/trade"
+  archive:
+    account-conn: "/db/archive/account"
+    trade-conn: "/db/archive/trade"

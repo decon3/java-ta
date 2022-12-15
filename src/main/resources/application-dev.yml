@@ -1,0 +1,13 @@
+spring:
+  security:
+    user:
+      name: user
+      password: abedd
+      roles: user
+server:
+  port: 9080
+logging:
+  level:
+    .: INFO
+    org.springframework: WARN
+    me.sk.ta: TRACE
