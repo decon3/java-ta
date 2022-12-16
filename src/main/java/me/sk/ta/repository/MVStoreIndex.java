@@ -154,9 +154,15 @@ public class MVStoreIndex<K, V> {
         indexDb.close();
     }
 
-    public void clear() {
-        MVMap<String, String> map = indexDb.openMap(indexName);
-        map.clear();
+    public boolean drop() {
+        try {
+            log.info("Deleting {} index", baseDir.getAbsolutePath());
+            Files.deleteIfExists(baseDir.getAbsoluteFile().toPath());
+            return true;
+        } catch (IOException e) {
+            log.error("Error deleting {} index. Cause: '{}', message: '{}'", baseDir.getAbsolutePath(), e.getCause(), e.getMessage());
+            return false;
+        }
     }
 
     private String generateKey(K key, V value) {
