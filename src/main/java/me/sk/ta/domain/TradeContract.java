@@ -1,5 +1,6 @@
 package me.sk.ta.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -7,6 +8,7 @@ import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Getter @Setter
 @Accessors(fluent = true, chain = true)
@@ -32,10 +34,25 @@ public class TradeContract {
         this.charges = calculator.estimateCostOfTrade(totalPrice, isIntraDay).total();
     }
 
-    public boolean isValid() {
+    @JsonIgnore
+    public boolean IsValid() {
         return true;
         // TODO call validater
         // return new TradeContractValidator().validate(this, ValidationUtils.);
+    }
+
+    @Override
+    public String toString() {
+        return "TradeContract{" +
+                "id=" + id +
+                ", date=" + date +
+                ", size=" + size +
+                ", averagePrice=" + averagePrice +
+                ", totalPrice=" + totalPrice +
+                ", charges=" + charges +
+                ", sale=" + isSale +
+                ", intraDay=" + isIntraDay +
+                '}';
     }
 
     private class TradeContractValidator implements Validator
@@ -66,4 +83,25 @@ public class TradeContract {
             }
         }
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TradeContract that = (TradeContract) o;
+        return id == that.id &&
+                size == that.size &&
+                Double.compare(that.averagePrice, averagePrice) == 0 &&
+                Double.compare(that.totalPrice, totalPrice) == 0 &&
+                Double.compare(that.charges, charges) == 0 &&
+                isSale == that.isSale &&
+                isIntraDay == that.isIntraDay &&
+                date.equals(that.date);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, date, size, averagePrice, totalPrice, charges, isSale, isIntraDay);
+    }
+
 }

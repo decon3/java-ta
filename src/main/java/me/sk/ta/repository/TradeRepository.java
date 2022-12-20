@@ -1,36 +1,51 @@
 package me.sk.ta.repository;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import me.sk.ta.domain.Trade;
 import me.sk.ta.domain.TradingAccount;
+import me.sk.ta.domain.TradingChargesCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+@Component
 public class TradeRepository {
-    private static final Logger log = LoggerFactory.getLogger(TradingAccount.class);
-    // We always need an Env. An Env owns a physical on-disk storage file. One
-    // Env can store many different databases (ie sorted maps).
+    private static final Logger log = LoggerFactory.getLogger(TradeRepository.class);
     static final String TRADE_DB = "trade";
     static final String ARCHIVE_DB = "tradeArchive";
     static final String ACCOUNT_DB = "account";
 
     final String TRADE_KEY_COUNTER = "TRADE_ID_COUNTER";
-    final RocksDbIndex<String, Integer> symbolIndex;
-    final RocksDbIndex<LocalDate, Integer> dateIndex;
+    final MVStoreIndex<String, Integer> symbolIndex;
+    final MVStoreIndex<LocalDate, Integer> dateIndex;
     final KvDb<String, Integer> countersDb;
     final KvDb<Integer, Trade> db;
-    @Value("${db.current.trade-conn}")
     String dbPath;
+    final TradingChargesCalculator chargesCalculator;
 
-    public TradeRepository() {
-        db = new RocksDbRepo<Integer, Trade>(dbPath, "trade");
-        symbolIndex = new RocksDbIndex<>(dbPath, "SYMBOL_INDEX", RocksDbIndex.IndexingStrategy.PostFixValue, String.class, Integer.class);
-        dateIndex = new RocksDbIndex<>(dbPath, "DATE_INDEX", RocksDbIndex.IndexingStrategy.PostFixValue, LocalDate.class, Integer.class);
-        countersDb = new RocksDbRepo<String, Integer>(dbPath, "counters");
+    public TradeRepository(@Value("${db.conn.current.trade}") String dbPath, ObjectMapper serializer, TradingChargesCalculator tc) {
+        if (dbPath == null) {
+            throw new IllegalArgumentException("dbPath has not been initialized");
+        }
+        this.dbPath = dbPath;
+        this.chargesCalculator = tc;
+        db = new MVStoreRepo<Integer, Trade>(dbPath, "trade", Integer.class, Trade.class, serializer);
+        symbolIndex = new MVStoreIndex<>(dbPath, "SYMBOL_INDEX", MVStoreIndex.IndexingStrategy.PostfixValue, String.class, Integer.class, "~~~", serializer);
+        dateIndex = new MVStoreIndex<>(dbPath, "DATE_INDEX", MVStoreIndex.IndexingStrategy.PostfixValue, LocalDate.class, Integer.class, "~~~", serializer);
+        countersDb = new MVStoreRepo<String, Integer>(dbPath, "counters", String.class, Integer.class, serializer);
+    }
+
+    public Trade find(int id) {
+        if (id < 1) {
+            throw new IllegalArgumentException("id");
+        }
+        return db.get(id);
     }
 
     public Optional<Trade> get(int id) {
@@ -56,6 +71,7 @@ public class TradeRepository {
         if (t.isEmpty()) {
             return t;
         }
+        t.get().tcCalculator = this.chargesCalculator;
         if (t.get().isClosed())
             return Optional.empty();
         else
@@ -139,12 +155,19 @@ public class TradeRepository {
         dateIndex.close();
     }
 
+    public void drop() {
+        db.drop();
+        countersDb.drop();
+        symbolIndex.drop();
+        dateIndex.drop();
+    }
+
     private int getNextId() {
         var counter = countersDb.find(TRADE_KEY_COUNTER);
         var newValue = 1;
         if (counter.isPresent()) {
-            countersDb.save(TRADE_KEY_COUNTER, counter.get() + 1);
-            newValue = counter.get() + 1;
+            newValue = counter.get();
+            newValue += 1;
         }
         countersDb.save(TRADE_KEY_COUNTER, newValue);
         return newValue;

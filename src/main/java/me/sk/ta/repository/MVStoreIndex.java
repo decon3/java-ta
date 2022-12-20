@@ -16,7 +16,7 @@ import java.util.Iterator;
 import java.util.List;
 
 public class MVStoreIndex<K, V> {
-    private static final Logger log = LoggerFactory.getLogger("H2IndexDb");
+    private static final Logger log = LoggerFactory.getLogger(MVStoreIndex.class);
     final MVStore indexDb;
     final String indexName;
     final IndexingStrategy strategy;
@@ -24,13 +24,15 @@ public class MVStoreIndex<K, V> {
     final Class valueClass;
     final Class keyClass;
     final String keySeparator;
+    final ObjectMapper serializer;
 
-    public MVStoreIndex(String dbFolder, String indexName, IndexingStrategy strategy, Class valueType, Class keyClass, String keySeparator) {
+    public MVStoreIndex(String dbFolder, String indexName, IndexingStrategy strategy, Class valueType, Class keyClass, String keySeparator, ObjectMapper serializer) {
         this.strategy = strategy;
         this.valueClass = valueType;
         this.keyClass = keyClass;
         this.indexName = indexName;
         this.keySeparator = keySeparator;
+        this.serializer = serializer;
         if (strategy.equals(IndexingStrategy.PostfixValue) || strategy.equals(IndexingStrategy.PostfixWithCount)) {
             if (keySeparator == null || keySeparator.isEmpty()) {
                 throw new RuntimeException("key separator is required for PostfixValue/PostfixWithCount strategies");
@@ -61,23 +63,14 @@ public class MVStoreIndex<K, V> {
 
     ObjectMapper jacksonMapper;
 
-    private synchronized ObjectMapper getSerializer() {
-        if (jacksonMapper == null) {
-            jacksonMapper = new ObjectMapper();
-            jacksonMapper.registerModule(new JavaTimeModule());
-        }
-        return jacksonMapper;
-    }
-
     public synchronized List<V> find(K desiredKey) {
         if (desiredKey == null) {
             throw new IllegalArgumentException("indexKey");
         }
         List<V> result = new ArrayList<>();
         MVMap<String, String> map = indexDb.openMap(indexName);
-        var jm = getSerializer();
         try {
-            var ikd = jm.writeValueAsString(desiredKey);
+            var ikd = serializer.writeValueAsString(desiredKey);
             Iterator<String> it = map.keyIterator(ikd);
             while (it.hasNext()) {
                 var key = it.next();
@@ -92,19 +85,18 @@ public class MVStoreIndex<K, V> {
         }
     }
 
-    private V getValue(String key, String value) {
+    private synchronized V getValue(String key, String value) {
         try {
-            var om = getSerializer();
             switch (strategy) {
                 case PostfixWithCount -> {
-                    return (V) om.readValue(value, valueClass);
+                    return (V) serializer.readValue(value, valueClass);
                 }
                 case PostfixValue -> {
                     var posOfValue = key.indexOf(keySeparator) + keySeparator.length();
                     if (posOfValue < key.length())
-                        return (V) om.readValue(value, valueClass);
+                        return (V) serializer.readValue(value, valueClass);
                     else
-                        return (V) om.readValue(key.substring(posOfValue, key.length()), valueClass);
+                        return (V) serializer.readValue(key.substring(posOfValue, key.length()), valueClass);
                 }
                 case MultipleValues -> {
                     throw new RuntimeException("MultipleValues strategy is not implemented");
@@ -127,10 +119,10 @@ public class MVStoreIndex<K, V> {
 
         try {
             MVMap<String, String> map = indexDb.openMap(indexName);
-            if (map.get(getSerializer().writeValueAsString(key)) == null) {
-                map.put(getSerializer().writeValueAsString(key), getSerializer().writeValueAsString(value));
+            if (map.get(serializer.writeValueAsString(key)) == null) {
+                map.put(serializer.writeValueAsString(key), serializer.writeValueAsString(value));
             } else {
-                map.put(generateKey(key, value), getSerializer().writeValueAsString(value));
+                map.put(generateKey(key, value), serializer.writeValueAsString(value));
             }
         } catch (JsonProcessingException e) {
             log.error("Error saving entry. Cause: '{}', message: '{}'", e.getCause(), e.getMessage());
@@ -139,7 +131,7 @@ public class MVStoreIndex<K, V> {
         return true;
     }
 
-    public void delete(K indexKey, V indexValue) {
+    public synchronized void delete(K indexKey, V indexValue) {
         if (indexKey == null) {
             throw new IllegalArgumentException("indexKey");
         }
@@ -150,17 +142,25 @@ public class MVStoreIndex<K, V> {
         map.remove(generateKey(indexKey, indexValue));
     }
 
-    public void close() {
+    public synchronized void close() {
         indexDb.close();
+        log.debug("{} index closed", indexName);
     }
 
-    public boolean drop() {
+    public synchronized void clear() {
+        MVMap<String, String> map = indexDb.openMap(indexName);
+        map.clear();
+        log.debug("{} index cleared of all entries", indexName);
+    }
+
+    public synchronized boolean drop() {
         try {
-            log.info("Deleting {} index", baseDir.getAbsolutePath());
+            log.info("Dropping {} index", baseDir.getAbsolutePath());
+            indexDb.close();
             Files.deleteIfExists(baseDir.getAbsoluteFile().toPath());
             return true;
         } catch (IOException e) {
-            log.error("Error deleting {} index. Cause: '{}', message: '{}'", baseDir.getAbsolutePath(), e.getCause(), e.getMessage());
+            log.error("Error dropping {} index. Cause: '{}', message: '{}'", baseDir.getAbsolutePath(), e.getCause(), e.getMessage());
             return false;
         }
     }
@@ -182,9 +182,8 @@ public class MVStoreIndex<K, V> {
 
     private String postFixCount(K key) {
         try {
-            var om = getSerializer();
-            var ks = om.writeValueAsString(key);
-            var vs = om.writeValueAsString(GetCount());
+            var ks = serializer.writeValueAsString(key);
+            var vs = serializer.writeValueAsString(GetPostfixCount());
             return (ks + keySeparator + vs);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
@@ -193,17 +192,15 @@ public class MVStoreIndex<K, V> {
 
     private String postFixValue(K key, V value) {
         try {
-            var om = new ObjectMapper();
-            om.registerModule(new JavaTimeModule());
-            var ks = om.writeValueAsString(key);
-            var vs = om.writeValueAsString(value);
+            var ks = serializer.writeValueAsString(key);
+            var vs = serializer.writeValueAsString(value);
             return (ks + keySeparator + vs);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private Long GetCount() {
+    private Long GetPostfixCount() {
         MVMap<Integer, Long> map = indexDb.openMap("indexName" + "-counter");
         if (map.get(1) == null) {
             map.put(1, 0L);

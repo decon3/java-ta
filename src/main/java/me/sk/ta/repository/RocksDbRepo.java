@@ -115,4 +115,20 @@ public class RocksDbRepo<K, V> implements KvDb<K, V> {
             throw new RuntimeException(e);
         }
     }
+
+    @Override
+    public void drop() {
+        this.close();
+        try {
+            Files.deleteIfExists(baseDir.getAbsoluteFile().toPath());
+        } catch (IOException e) {
+            log.error("Error dropping the table, cause: '{}', message: '{}'", e.getCause(), e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public V get(K key) {
+        return null;
+    }
 }

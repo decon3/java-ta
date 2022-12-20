@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 import static me.sk.ta.domain.DelayedFormatterUtility.format;
 
@@ -35,6 +36,10 @@ public class BuyAnalysis extends AnalysisAbstract {
     private double buyRangeHigh;
     private LocalDate earningsDate;
 
+    public BuyAnalysis() {
+        // for deserialization
+        super();
+    }
     public BuyAnalysis priceLevels(double capital, double percentOfCapitalRisked, double low, double high, double target, double stopLoss) {
         this.buyRangeLow = low;
         this.buyRangeHigh = high;
@@ -148,5 +153,40 @@ public class BuyAnalysis extends AnalysisAbstract {
                 pyramidPosition);
         log.trace("Exit - " + p);
         return p;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        BuyAnalysis that = (BuyAnalysis) o;
+        return Double.compare(that.capital, capital) == 0 &&
+                Double.compare(that.percentOfCapitalRisked, percentOfCapitalRisked) == 0 &&
+                Double.compare(that.targetPrice, targetPrice) == 0 &&
+                position == that.position &&
+                stage == that.stage &&
+                breakout == that.breakout &&
+                Double.compare(that.pivot, pivot) == 0 &&
+                Double.compare(that.buyRangeLow, buyRangeLow) == 0 &&
+                Double.compare(that.buyRangeHigh, buyRangeHigh) == 0 &&
+                pattern == that.pattern &&
+                earningsDate.equals(that.earningsDate);
+    }
+
+    @Override
+    public int hashCode() {
+        return  Objects.hash(super.hashCode(),
+                capital,
+                percentOfCapitalRisked,
+                targetPrice,
+                position,
+                stage,
+                breakout,
+                pattern,
+                pivot,
+                buyRangeLow,
+                buyRangeHigh,
+                earningsDate);
     }
 }

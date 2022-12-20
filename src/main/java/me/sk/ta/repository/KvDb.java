@@ -8,9 +8,14 @@ public interface KvDb<K, V> {
     boolean save(K key, V value);
 
     Optional<V> find(K key);
+
     List<V> findAll(Function<V, Optional<V>> filter);
 
     boolean delete(K key);
 
     void close();
+
+    V get(K key);
+
+    void drop();
 }

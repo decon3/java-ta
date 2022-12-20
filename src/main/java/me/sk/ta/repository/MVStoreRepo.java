@@ -2,7 +2,6 @@ package me.sk.ta.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.h2.mvstore.Cursor;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
@@ -25,45 +24,42 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
     final Class valueClass;
 
     final Class keyClass;
+    final ObjectMapper serializer;
 
     // execute after the application starts.
-    public MVStoreRepo(String dbFolder, String dbName, Class valueType, Class keyClass) {
+    public MVStoreRepo(String dbFolder, String dbName, Class keyClass, Class valueType, ObjectMapper serializer) {
         DB_FILE_NAME = dbName;
         baseDir = new File(dbFolder, DB_FILE_NAME);
         this.valueClass = valueType;
         this.keyClass = keyClass;
+        this.serializer = serializer;
 
         try {
+            log.debug("Creating path: {}", baseDir.getParentFile().toPath());
             Files.createDirectories(baseDir.getParentFile().toPath());
-            Files.createDirectories(baseDir.getAbsoluteFile().toPath());
             db = new MVStore.Builder()
                     .fileName(baseDir.getAbsolutePath())
                     .encryptionKey("007".toCharArray())
                     .compress()
                     .open();
             log.info("{} db initialized at {}", DB_FILE_NAME, baseDir.getAbsolutePath());
+            log.info("key class: {}, value class: {}", keyClass, valueClass);
         } catch (IOException e) {
             log.error("Error initializing {} db. Exception: '{}', message: '{}'", DB_FILE_NAME, e.getCause(), e.getMessage(), e);
+            throw new RuntimeException(e);
         }
-    }
-
-    private ObjectMapper getSerializer() {
-        var jm = new ObjectMapper();
-
-        if (keyClass.getModule().getName().equals("java.time") ||
-                valueClass.getModule().getName().equals("java.time")) {
-            jm.registerModule(new JavaTimeModule());
-        }
-        return jm;
     }
 
     @Override
     public synchronized boolean save(K key, V value) {
-        log.info("saving value '{}' with key '{}'", value, key);
+        if (key == null) {
+            throw new IllegalArgumentException("key");
+        }
+        log.trace("saving value '{}' with key '{}'", value, key);
 
         try {
             MVMap<String, String> map = db.openMap(DB_FILE_NAME);
-            map.put(getSerializer().writeValueAsString(key), getSerializer().writeValueAsString(value));
+            map.put(serializer.writeValueAsString(key), value == null ? null : serializer.writeValueAsString(value));
         } catch (JsonProcessingException e) {
             log.error("Error saving entry. Cause: '{}', message: '{}'", e.getCause(), e.getMessage());
             return false;
@@ -72,16 +68,46 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
     }
 
     @Override
+    public synchronized V get(K key) {
+        if (key == null) {
+            throw new IllegalArgumentException("key cannot be null");
+        }
+        try {
+            MVMap<String, String> map = db.openMap(DB_FILE_NAME);
+            var kd = serializer.writeValueAsString(key);
+            if (map.containsKey(key)) {
+                var value = map.get(kd);
+                log.info("finding key '{}' returns '{}'", key, value);
+                if (value == null) {
+                    return null;
+                } else {
+                    return (V) serializer.readValue(value, valueClass);
+                }
+            }
+            else {
+                throw new RuntimeException("Not found");
+            }
+        } catch (JsonProcessingException e) {
+            log.error(
+                    "Error retrieving the entry with key: {}, cause: {}, message: {}",
+                    key,
+                    e.getCause(),
+                    e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
     public synchronized Optional<V> find(K key) {
 
         try {
             MVMap<String, String> map = db.openMap(DB_FILE_NAME);
-            var value = map.get(getSerializer().writeValueAsString(key));
+            var value = map.get(serializer.writeValueAsString(key));
             log.info("finding key '{}' returns '{}'", key, value);
             if (value == null) {
                 return Optional.empty();
             } else {
-                return Optional.of((V) getSerializer().readValue(value, valueClass));
+                return Optional.of((V) serializer.readValue(value, valueClass));
             }
         } catch (JsonProcessingException e) {
             log.error(
@@ -96,7 +122,7 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
     @Override
     public synchronized List<V> findAll(Function<V, Optional<V>> filter) {
         List<V> result = new ArrayList<>();
-        var jm = getSerializer();
+        var jm = serializer;
         try {
             MVMap<String, String> map = db.openMap(DB_FILE_NAME);
             if (map.firstKey() == null) {
@@ -105,10 +131,17 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
             Cursor<String, String> it = map.cursor(map.firstKey());
             while (it.hasNext()) {
                 it.next();
-                var v = (V) jm.readValue(it.getValue(), valueClass);
-                var ov = filter.apply(v);
-                if (ov.isPresent()) {
-                    result.add(ov.get());
+                V val = null;
+                if (it.getValue() != null) {
+                    val = (V) jm.readValue(it.getValue(), valueClass);
+                }
+                if (filter == null) {
+                    result.add(val);
+                } else {
+                    var filterResult = filter.apply(val);
+                    if (filterResult.isPresent()) {
+                        result.add(filterResult.get());
+                    }
                 }
             }
             return result;
@@ -125,11 +158,11 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
     public synchronized boolean delete(K key) {
         log.info("deleting key '{}'", key);
         if (key == null) {
-            throw new IllegalArgumentException("key");
+            return false;
         }
         MVMap<String, String> map = db.openMap(DB_FILE_NAME);
         try {
-            map.remove(getSerializer().writeValueAsString(key));
+            map.remove(serializer.writeValueAsString(key));
             return true;
         } catch (JsonProcessingException e) {
             log.error(
@@ -144,5 +177,16 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
     @Override
     public void close() {
         db.close();
+    }
+
+    @Override
+    public synchronized void drop() {
+        try {
+            log.info("Dropping {} table", baseDir.getAbsolutePath());
+            db.close();
+            Files.deleteIfExists(baseDir.getAbsoluteFile().toPath());
+        } catch (IOException e) {
+            log.error("Error dropping {} table. Cause: '{}', message: '{}'", baseDir.getAbsolutePath(), e.getCause(), e.getMessage());
+        }
     }
 }

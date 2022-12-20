@@ -4,10 +4,24 @@ spring:
       name: user
       password: abedd
       roles: user
+
 server:
   port: 9080
+
 logging:
   level:
     .: INFO
     org.springframework: WARN
     me.sk.ta: TRACE
+  pattern:
+    console: '%d{HH:mm:ss.SSS} %magenta([%thread]) %highlight(%-5level) %logger.%M\(\) - %msg%n'
+    file: '%d{dd-MM-yyyy HH:mm:ss.SSS} [%thread] %-5level %logger.%M\(\) - %msg%n'
+
+db:
+  conn:
+    current:
+      account: "db/current/account"
+      trade: "db/current/trade"
+    archive:
+      account: "db/archive/account"
+      trade: "db/archive/trade"

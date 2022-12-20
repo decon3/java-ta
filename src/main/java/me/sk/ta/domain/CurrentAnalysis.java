@@ -8,6 +8,7 @@ import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;
 
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Getter @SuperBuilder
 public class CurrentAnalysis extends AnalysisAbstract {
@@ -56,6 +57,20 @@ public class CurrentAnalysis extends AnalysisAbstract {
                 .increaseInFundHoldings(b.increaseInFundHoldings)
                 .floatingShares(b.floatingShares)
                 .build();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        CurrentAnalysis that = (CurrentAnalysis) o;
+        return Double.compare(that.price, price) == 0 && date.equals(that.date);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), date, price);
     }
 
     private class CurrentAnalysisValidator implements Validator {

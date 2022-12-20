@@ -1,24 +1,23 @@
 package me.sk.ta.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.DateTimeException;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import static me.sk.ta.domain.DelayedFormatterUtility.format;
 
 public class Trade {
     private static final Logger log = LoggerFactory.getLogger(Trade.class);
-    private final TradingChargesCalculator tcCalculator;
+    public TradingChargesCalculator tcCalculator;
     public int ID;
     public String symbol;
     public BuyAnalysis buyAnalysis;
 
+    @JsonIgnore
     public double getStopLoss() {
         return getCurrentAnalysis().getStopLoss();
     }
@@ -28,10 +27,12 @@ public class Trade {
     public int position;
     public int unfilledPosition;
 
+    @JsonIgnore
     public boolean isClosed() {
         return position == 0 && tradeHistory.size() > 0;
     }
 
+    @JsonIgnore
     public double averageBuyPrice() {
         if (tradeHistory.stream().anyMatch(x -> x.isSale() == false)) {
             return totalBuyPrice() / tradeHistory.stream()
@@ -43,15 +44,17 @@ public class Trade {
         }
     }
 
+    @JsonIgnore
     public double currentInvestment() {
         return Utils.round(getHoldingSize() * averageBuyPrice(), 2);
     }
 
+    @JsonIgnore
     public double totalCharges() {
         return Utils.round(tradeHistory.stream().mapToDouble(x -> x.charges()).sum(), 2);
     }
 
-
+    @JsonIgnore
     public double currentInvestmentCharges() {
         if (tradeHistory.stream().anyMatch(x -> x.isSale() == false)) {
             var avg = totalCharges() / tradeHistory.stream().filter(x -> x.isSale() == false).mapToInt(x -> x.size()).sum();
@@ -111,9 +114,14 @@ public class Trade {
         return Utils.round(currentValue - totalBuyPrice(), 2);
     }
 
+    @JsonIgnore
     public int getHoldingSize() {
         return tradeHistory.stream().filter(x -> x.isSale() == false).mapToInt(x -> x.size()).sum() -
                 tradeHistory.stream().filter(x -> x.isSale()).mapToInt(x -> x.size()).sum();
+    }
+
+    public Trade() {
+        // Used by the serializer when retrieving from the database
     }
 
     public Trade(TradingChargesCalculator tcCalculator) {
@@ -192,6 +200,7 @@ public class Trade {
         return buyAnalysis.CalculateAdditionalPosition(currentCost, currentSize, newPrice, newStoploss);
     }
 
+    @JsonIgnore
     public CurrentAnalysis getCurrentAnalysis() {
         if (analysisHistory.size() == 0) {
             return CurrentAnalysis.from(buyAnalysis);
@@ -206,6 +215,7 @@ public class Trade {
         analysisHistory.add(analysis);
     }
 
+    @JsonIgnore
     public void setNewStoploss(double price) {
         if (analysisHistory.size() == 0) {
             throw new RuntimeException("Set stoploss in today's analysis");
@@ -221,14 +231,14 @@ public class Trade {
     }
 
     public TradeContract Buy(int id, int size, double averagePrice, LocalDate date, boolean isIntraDay) {
-        log.trace("Purchased {}", size);
+        log.trace("Purchased {} @{}", size, averagePrice);
         var contract = new TradeContract(id, date, size, averagePrice, isIntraDay, this.tcCalculator);
         saveOrUpdateOrder(contract);
         return contract;
     }
 
     public TradeContract Sell(int orderId, int size, double averagePrice, LocalDate date, boolean isIntraDay) {
-        log.trace("Sold {}", size);
+        log.trace("Sold {} @{}", size, averagePrice);
         var contract = new TradeContract(orderId, date, size, averagePrice, isIntraDay, this.tcCalculator);
         contract.isSale(true);
         saveOrUpdateOrder(contract);
@@ -236,7 +246,7 @@ public class Trade {
     }
 
     private void saveOrUpdateOrder(TradeContract contract) {
-        if (contract.isValid()) {
+        if (contract.IsValid()) {
             if (contract.id() != 0) {
                 if (tradeHistory.size() > 0) {
                     tradeHistory.removeAll(tradeHistory.stream().filter(x -> x.id() == contract.id() && x.isSale() == contract.isSale()).toList());
@@ -291,6 +301,7 @@ public class Trade {
                 .build();
     }
 
+    @JsonIgnore
     public Optional<LocalDate> getDateOfClosure() {
         var tc = tradeHistory.stream()
                 .filter(x -> x.isSale())
@@ -303,6 +314,7 @@ public class Trade {
         }
     }
 
+    @JsonIgnore
     public static boolean IsValidDate(int year, int month, int day) {
         if (year < 2000)
             return false;
@@ -319,5 +331,24 @@ public class Trade {
         position = tradeHistory.stream().filter(x -> x.isSale() == false).mapToInt(TradeContract::size).sum();
         position -= tradeHistory.stream().filter(x -> x.isSale()).mapToInt(TradeContract::size).sum();
         unfilledPosition = buyAnalysis.calculatePosition() - position;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Trade trade = (Trade) o;
+        return ID == trade.ID &&
+                position == trade.position &&
+                unfilledPosition == trade.unfilledPosition &&
+                symbol.equals(trade.symbol) &&
+                buyAnalysis.equals(trade.buyAnalysis) &&
+                analysisHistory.equals(trade.analysisHistory) &&
+                tradeHistory.equals(trade.tradeHistory);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(ID, symbol, buyAnalysis, analysisHistory, tradeHistory, position, unfilledPosition);
     }
 }

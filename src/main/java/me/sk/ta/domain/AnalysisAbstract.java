@@ -3,6 +3,8 @@ package me.sk.ta.domain;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
+import java.util.Objects;
+
 @Getter
 @SuperBuilder
 public abstract class AnalysisAbstract {
@@ -43,6 +45,10 @@ public abstract class AnalysisAbstract {
     protected double increaseInFunds;
     protected double increaseInFundHoldings;
     protected double floatingShares;
+
+    public AnalysisAbstract() {
+        // for deserialization
+    }
 
     public AnalysisAbstract scoresByGurus(int guruScoreBg, int guruScoreJos, int guruScorePl, int guruScoreWb) {
         this.guruScoreBg = guruScoreBg;
@@ -97,5 +103,73 @@ public abstract class AnalysisAbstract {
         this.debt = debt;
         this.marketTrend = trend;
         return this;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AnalysisAbstract that = (AnalysisAbstract) o;
+        return Double.compare(that.alpha, alpha) == 0 &&
+                Double.compare(that.beta, beta) == 0 &&
+                Double.compare(that.debt, debt) == 0 &&
+                Double.compare(that.stopLoss, stopLoss) == 0 &&
+                Double.compare(that.dma20, dma20) == 0 &&
+                Double.compare(that.dma50, dma50) == 0 &&
+                Double.compare(that.dma100, dma100) == 0 &&
+                Double.compare(that.obvValue, obvValue) == 0 &&
+                obvPositive == that.obvPositive &&
+                cmfPositive == that.cmfPositive &&
+                adPositive == that.adPositive &&
+                wonMasterRating == that.wonMasterRating &&
+                wonRSRating == that.wonRSRating &&
+                wonEpsRating == that.wonEpsRating &&
+                guruScoreWon == that.guruScoreWon &&
+                guruScorePl == that.guruScorePl &&
+                guruScoreWb == that.guruScoreWb &&
+                guruScoreBg == that.guruScoreBg &&
+                guruScoreJos == that.guruScoreJos &&
+                Double.compare(that.increaseInFunds, increaseInFunds) == 0 &&
+                Double.compare(that.increaseInFundHoldings, increaseInFundHoldings) == 0 &&
+                Double.compare(that.floatingShares, floatingShares) == 0 &&
+                obvTrend == that.obvTrend &&
+                cmfTrend == that.cmfTrend &&
+                adTrend == that.adTrend &&
+                Objects.equals(comments, that.comments) &&
+                wonADRating == that.wonADRating &&
+                marketTrend == that.marketTrend;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                alpha,
+                beta,
+                debt,
+                stopLoss,
+                dma20,
+                dma50,
+                dma100,
+                obvValue,
+                obvTrend,
+                obvPositive,
+                cmfTrend,
+                cmfPositive,
+                adTrend,
+                adPositive,
+                comments,
+                wonMasterRating,
+                wonRSRating,
+                wonEpsRating,
+                wonADRating,
+                guruScoreWon,
+                guruScorePl,
+                guruScoreWb,
+                guruScoreBg,
+                guruScoreJos,
+                marketTrend,
+                increaseInFunds,
+                increaseInFundHoldings,
+                floatingShares);
     }
 }
