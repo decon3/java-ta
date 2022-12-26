@@ -31,7 +31,8 @@ public class TradeRepository {
         if (dbPath == null) {
             throw new IllegalArgumentException("dbPath has not been initialized");
         }
-        this.dbPath = Path.of(dbPath).resolve("live").toString();
+        dbPath = Path.of(dbPath).resolve("live").toString();
+        this.dbPath = dbPath;
         this.chargesCalculator = tc;
         db = new MVStoreRepo<Integer, Trade>(dbPath, "trade", Integer.class, Trade.class, serializer);
         symbolIndex = new MVStoreIndex<>(dbPath, "SYMBOL_INDEX", MVStoreIndex.IndexingStrategy.PostfixValue, String.class, Integer.class, "~~~", serializer);

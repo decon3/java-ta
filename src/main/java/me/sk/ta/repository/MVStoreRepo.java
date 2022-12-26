@@ -63,6 +63,7 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
 
     @Override
     public synchronized boolean save(K key, V value) {
+        log.debug("Saving {} => {}", key, value);
         var tx = beginTransaction();
         try
         {

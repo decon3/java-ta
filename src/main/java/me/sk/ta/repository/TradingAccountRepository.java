@@ -26,11 +26,12 @@ public class TradingAccountRepository {
     String dbPath;
     final TradingChargesCalculator chargesCalculator;
 
-    public TradingAccountRepository(@Value("${db.conn.current.trade}") String dbPath, ObjectMapper serializer, TradingChargesCalculator tc) {
+    public TradingAccountRepository(@Value("${db.conn.current.account}") String dbPath, ObjectMapper serializer, TradingChargesCalculator tc) {
         if (dbPath == null) {
             throw new IllegalArgumentException("dbPath has not been initialized");
         }
-        this.dbPath = Path.of(dbPath).resolve("live").toString();
+        dbPath = Path.of(dbPath).resolve("live").toString();
+        this.dbPath = dbPath;
         this.chargesCalculator = tc;
         db = new MVStoreRepo<Integer, TradingAccount>(dbPath, "trading_account", Integer.class, Trade.class, serializer);
         dateIndex = new MVStoreIndex<>(dbPath, "DATE_INDEX", MVStoreIndex.IndexingStrategy.PostfixValue, LocalDate.class, Integer.class, "~~~", serializer);

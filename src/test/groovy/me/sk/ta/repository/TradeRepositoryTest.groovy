@@ -142,6 +142,7 @@ class TradeRepositoryTest extends Specification {
 
     void setup() {
         repo = ctx.getBean(TradeRepository.class);
+        log.debug("Instantiated the repository");
         ba = BuyAnalysis.builder()
                 .earningsDate(Utils.UtcToday().plusDays(20))
                 .build()

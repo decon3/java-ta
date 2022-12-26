@@ -25,7 +25,7 @@ public class TradeArchiveRepository {
     String dbPath;
     final TradingChargesCalculator chargesCalculator;
 
-    public TradeArchiveRepository(@Value("${db.conn.current.trade}") String dbPath, ObjectMapper serializer, TradingChargesCalculator tc) {
+    public TradeArchiveRepository(@Value("${db.conn.archive.trade}") String dbPath, ObjectMapper serializer, TradingChargesCalculator tc) {
         if (dbPath == null) {
             throw new IllegalArgumentException("dbPath has not been initialized");
         }
