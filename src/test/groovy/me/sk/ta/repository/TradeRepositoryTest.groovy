@@ -52,7 +52,13 @@ class TradeRepositoryTest extends Specification {
     def "GetClosedTrades"() {
     }
 
-    def "TestGetClosedTrades"() {
+    def "spring registers time module with jackson serializer in the background"() {
+        given:
+        var som = ctx.getBean(ObjectMapper.class);
+        var mom = new ObjectMapper();
+        expect:
+        som.writeValueAsString(Utils.UtcNow()).length() > 0
+        mom.writeValueAsString(Utils.UtcNow()).length() > 0
     }
 
     def "Saves an open trade"() {
@@ -103,29 +109,29 @@ class TradeRepositoryTest extends Specification {
     def "SaveOrUpdate saves all the properties of the trade objects"() {
         given: "two winning trades and one loss"
 
-        var t = Trade.initiateTrade("INFY", ba, tcCalculator)
-        t.Buy(1, 100, 335.35, Utils.UtcToday().minusDays(5), false)
-        t.Sell(1, 100, 345.75, Utils.UtcToday(), false)
+        var wt1 = Trade.initiateTrade("INFY", ba, tcCalculator)
+        wt1.Buy(1, 100, 335.35, Utils.UtcToday().minusDays(5), false)
+        wt1.Sell(1, 100, 345.75, Utils.UtcToday(), false)
 
         var losingTrade = Trade.initiateTrade("INFY", ba, tcCalculator)
         losingTrade.Buy(1, 100, 335.35, Utils.UtcToday().minusDays(5), false)
         losingTrade.Sell(1, 100, 320.75, Utils.UtcToday(), false)
 
-        var t3 = Trade.initiateTrade("INFY", ba, tcCalculator)
-        t3.Buy(1, 100, 330.35, Utils.UtcToday().minusDays(5), false)
-        t3.Sell(1, 100, 345.75, Utils.UtcToday(), false)
+        var wt2 = Trade.initiateTrade("INFY", ba, tcCalculator)
+        wt2.Buy(1, 100, 330.35, Utils.UtcToday().minusDays(5), false)
+        wt2.Sell(1, 100, 345.75, Utils.UtcToday(), false)
 
         when: "they are saved"
-        repo.saveOrUpdate(t);
+        repo.saveOrUpdate(wt1);
         repo.saveOrUpdate(losingTrade);
-        repo.saveOrUpdate(t3);
+        repo.saveOrUpdate(wt2);
 
         then: "the retrieved objects match the original"
-        repo.get(t.ID).get() == t
+        repo.get(wt1.ID).get() == wt1
         and:
         repo.get(losingTrade.ID).get() == losingTrade
         and:
-        repo.get(t3.ID).get() == t3
+        repo.get(wt2.ID).get() == wt2
     }
 
     def "Delete"() {

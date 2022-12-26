@@ -2,24 +2,22 @@ package me.sk.ta.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import me.sk.ta.domain.Trade;
-import me.sk.ta.domain.TradingAccount;
 import me.sk.ta.domain.TradingChargesCalculator;
+import org.h2.mvstore.tx.Transaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 @Component
 public class TradeRepository {
     private static final Logger log = LoggerFactory.getLogger(TradeRepository.class);
-    static final String TRADE_DB = "trade";
-    static final String ARCHIVE_DB = "tradeArchive";
-    static final String ACCOUNT_DB = "account";
 
     final String TRADE_KEY_COUNTER = "TRADE_ID_COUNTER";
     final MVStoreIndex<String, Integer> symbolIndex;
@@ -33,7 +31,7 @@ public class TradeRepository {
         if (dbPath == null) {
             throw new IllegalArgumentException("dbPath has not been initialized");
         }
-        this.dbPath = dbPath;
+        this.dbPath = Path.of(dbPath).resolve("live").toString();
         this.chargesCalculator = tc;
         db = new MVStoreRepo<Integer, Trade>(dbPath, "trade", Integer.class, Trade.class, serializer);
         symbolIndex = new MVStoreIndex<>(dbPath, "SYMBOL_INDEX", MVStoreIndex.IndexingStrategy.PostfixValue, String.class, Integer.class, "~~~", serializer);
@@ -53,6 +51,12 @@ public class TradeRepository {
             throw new IllegalArgumentException("id");
         }
         return db.find(id);
+    }
+
+    public List<Trade> where(Predicate<Trade> predicate) {
+        return db.findAll(x -> {
+            return predicate.test(x) ? Optional.of(x) : Optional.empty();
+        });
     }
 
     public Optional<Trade> getOpenTrade(String symbol) {
@@ -104,9 +108,6 @@ public class TradeRepository {
     }
 
 
-    // TODO commit write transaction
-    // TODO close cursor
-    // TODO flip bytebuffer after writing to it
     public int saveOrUpdate(Trade trade) {
         if (trade == null) {
             throw new IllegalArgumentException("trade");
@@ -132,11 +133,37 @@ public class TradeRepository {
             return null;
         }
         */
-        db.save(trade.ID, trade);
-        symbolIndex.index(trade.symbol, trade.ID);
-        var closureDate = trade.getDateOfClosure();
-        if (closureDate.isPresent()) {
-            dateIndex.index(closureDate.get(), trade.ID);
+        Transaction tx1 = null, tx2 = null, tx3 = null;
+        boolean res1 = true, res2 = true, res3 = true;
+
+        try {
+            tx1 = db.beginTransaction();
+            tx2 = symbolIndex.beginTransaction();
+            tx3 = dateIndex.beginTransaction();
+
+            res1 = db.save(trade.ID, trade, tx1);
+            res2 = symbolIndex.index(trade.symbol, trade.ID, tx2);
+            var closureDate = trade.getDateOfClosure();
+            if (closureDate.isPresent()) {
+                res3 = dateIndex.index(closureDate.get(), trade.ID, tx3);
+            }
+            if (res1 && res2 && res3) {
+                tx1.commit();
+                tx2.commit();
+                tx3.commit();
+            } else {
+                tx1.rollback();
+                tx2.rollback();
+                tx3.rollback();
+                trade.ID = 0;
+            }
+        } catch ( Exception ex ) {
+            log.error("An exception occurred: {}", ex);
+            if (tx1 != null) tx1.rollback();
+            if (tx2 != null) tx2.rollback();
+            if (tx3 != null) tx3.rollback();
+            trade.ID = 0;
+            return 0;
         }
         return trade.ID;
     }
@@ -145,7 +172,43 @@ public class TradeRepository {
         if (id < 1) {
             throw new IllegalArgumentException("id");
         }
-        return db.delete(id);
+        var trade = db.find(id);
+        if (trade.isEmpty()) {
+            return false;
+        }
+
+        Transaction tx1 = null, tx2 = null, tx3 = null;
+        boolean res1 = true, res2 = true, res3 = true;
+
+        try {
+            tx1 = db.beginTransaction();
+            tx2 = symbolIndex.beginTransaction();
+            tx3 = dateIndex.beginTransaction();
+
+            res1 = db.delete(id, tx1);
+            res2 = symbolIndex.delete(trade.get().symbol, id, tx2);
+            var closureDate = trade.get().getDateOfClosure();
+            if (closureDate.isPresent()) {
+                res3 = dateIndex.index(closureDate.get(), id, tx3);
+            }
+            if (res1 && res2 && res3) {
+                tx1.commit();
+                tx2.commit();
+                tx3.commit();
+                return true;
+            } else {
+                tx1.rollback();
+                tx2.rollback();
+                tx3.rollback();
+                return false;
+            }
+        } catch ( Exception ex ) {
+            log.error("An exception occurred: {}", ex);
+            if (tx1 != null) tx1.rollback();
+            if (tx2 != null) tx2.rollback();
+            if (tx3 != null) tx3.rollback();
+            return false;
+        }
     }
 
     public void close() {

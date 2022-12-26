@@ -2,9 +2,11 @@ package me.sk.ta.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
+import org.h2.mvstore.tx.Transaction;
+import org.h2.mvstore.tx.TransactionMap;
+import org.h2.mvstore.tx.TransactionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +20,7 @@ import java.util.List;
 public class MVStoreIndex<K, V> {
     private static final Logger log = LoggerFactory.getLogger(MVStoreIndex.class);
     final MVStore indexDb;
+    final TransactionStore ts;
     final String indexName;
     final IndexingStrategy strategy;
     File baseDir;
@@ -48,6 +51,7 @@ public class MVStoreIndex<K, V> {
                     .encryptionKey("007".toCharArray())
                     .compress()
                     .open();
+            ts = new TransactionStore(indexDb);
             log.info("{} IndexDB initialized at {}", indexName, baseDir.getAbsoluteFile().toPath());
         } catch (IOException e) {
             log.error("Error initializing IndexDB. Exception: '{}', message: '{}'", e.getCause(), e.getMessage(), e);
@@ -61,7 +65,9 @@ public class MVStoreIndex<K, V> {
         PostfixWithCount
     }
 
-    ObjectMapper jacksonMapper;
+    public synchronized Transaction beginTransaction() {
+        return ts.begin();
+    }
 
     public synchronized List<V> find(K desiredKey) {
         if (desiredKey == null) {
@@ -109,6 +115,23 @@ public class MVStoreIndex<K, V> {
     }
 
     public synchronized boolean index(K key, V value) {
+        var tx = beginTransaction();
+        try
+        {
+            var result = index(key, value, tx);
+            if (result) {
+                tx.commit();
+            } else {
+                tx.rollback();
+            }
+            return result;
+        } catch (Exception x) {
+            tx.rollback();
+            throw x;
+        }
+    }
+
+    public synchronized boolean index(K key, V value, Transaction tx) {
         if (key == null) {
             throw new IllegalArgumentException("key");
         }
@@ -118,12 +141,13 @@ public class MVStoreIndex<K, V> {
         log.debug("saving value '{}' with key '{}'", value, key);
 
         try {
-            MVMap<String, String> map = indexDb.openMap(indexName);
+            TransactionMap<String, String> map = tx.openMap(indexName);
             if (map.get(serializer.writeValueAsString(key)) == null) {
                 map.put(serializer.writeValueAsString(key), serializer.writeValueAsString(value));
             } else {
                 map.put(generateKey(key, value), serializer.writeValueAsString(value));
             }
+            tx.prepare();
         } catch (JsonProcessingException e) {
             log.error("Error saving entry. Cause: '{}', message: '{}'", e.getCause(), e.getMessage());
             return false;
@@ -131,7 +155,25 @@ public class MVStoreIndex<K, V> {
         return true;
     }
 
-    public synchronized void delete(K indexKey, V indexValue) {
+    public synchronized boolean delete(K key, V indexValue) {
+        var tx = beginTransaction();
+        try
+        {
+            var result = delete(key, indexValue, tx);
+            if (result) {
+                tx.commit();
+            }
+            else {
+                tx.rollback();
+            }
+            return result;
+        } catch (Exception ex) {
+            tx.rollback();
+            throw ex;
+        }
+    }
+
+    public synchronized boolean delete(K indexKey, V indexValue, Transaction tx) {
         if (indexKey == null) {
             throw new IllegalArgumentException("indexKey");
         }
@@ -139,7 +181,12 @@ public class MVStoreIndex<K, V> {
             throw new IllegalArgumentException("indexValue");
         }
         MVMap<String, String> map = indexDb.openMap(indexName);
-        map.remove(generateKey(indexKey, indexValue));
+        if (map.remove(generateKey(indexKey, indexValue)) == null) {
+            tx.prepare();
+            return true;
+        } else {
+            return false;
+        }
     }
 
     public synchronized void close() {
