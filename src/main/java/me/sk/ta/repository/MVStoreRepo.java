@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -58,26 +59,35 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
     }
 
     public synchronized Transaction beginTransaction() {
+        if (ts == null) {
+            ts = new TransactionStore(db);
+            ts.init();
+        }
         return ts.begin();
     }
 
     @Override
     public synchronized boolean save(K key, V value) {
-        log.debug("Saving {} => {}", key, value);
-        var tx = beginTransaction();
-        try
-        {
-            var result = save(key, value, tx);
-            if (result) {
-                tx.commit();
-            } else {
-                tx.rollback();
-            }
-            return result;
-        } catch (Exception x) {
-            tx.rollback();
-            throw x;
+        if (key == null) {
+            throw new IllegalArgumentException("key");
         }
+        log.trace("saving value '{}' with key '{}'", value, key);
+
+        var tx = beginTransaction();
+        try {
+            TransactionMap<String, String> map = tx.openMap(DB_FILE_NAME);
+            map.put(serializer.writeValueAsString(key), value == null ? null : serializer.writeValueAsString(value));
+            tx.commit();
+        } catch (MVStoreException te) {
+            tx.rollback();
+            log.error("Transaction failed: {}", te);
+            return false;
+        } catch (JsonProcessingException e) {
+            tx.rollback();
+            log.error("Error saving entry. Cause: '{}', message: '{}'", e.getCause(), e.getMessage());
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -91,7 +101,7 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
             TransactionMap<String, String> map = tx.openMap(DB_FILE_NAME);
             map.put(serializer.writeValueAsString(key), value == null ? null : serializer.writeValueAsString(value));
             tx.prepare();
-        } catch( MVStoreException te) {
+        } catch (MVStoreException te) {
             log.error("Transaction failed: {}", te);
             return false;
         } catch (JsonProcessingException e) {
@@ -106,8 +116,10 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null");
         }
+        log.trace("Open transactions: {}", ts.getOpenTransactions().size());
+        var tx = beginTransaction();
         try {
-            MVMap<String, String> map = db.openMap(DB_FILE_NAME);
+            TransactionMap<String, String> map = tx.openMap(DB_FILE_NAME);
             var kd = serializer.writeValueAsString(key);
             if (map.containsKey(key)) {
                 var value = map.get(kd);
@@ -117,8 +129,7 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
                 } else {
                     return (V) serializer.readValue(value, valueClass);
                 }
-            }
-            else {
+            } else {
                 throw new RuntimeException("Not found");
             }
         } catch (JsonProcessingException e) {
@@ -128,14 +139,18 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
                     e.getCause(),
                     e.getMessage());
             throw new RuntimeException(e);
+        } finally {
+            tx.commit();
         }
     }
 
     @Override
     public synchronized Optional<V> find(K key) {
 
+        log.trace("Open transactions: {}", ts.getOpenTransactions().size());
+        var tx = beginTransaction();
         try {
-            MVMap<String, String> map = db.openMap(DB_FILE_NAME);
+            TransactionMap<String, String> map = tx.openMap(DB_FILE_NAME);
             var value = map.get(serializer.writeValueAsString(key));
             log.info("finding key '{}' returns '{}'", key, value);
             if (value == null) {
@@ -150,6 +165,8 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
                     e.getCause(),
                     e.getMessage());
             throw new RuntimeException(e);
+        } finally {
+            tx.commit();
         }
     }
 
@@ -157,17 +174,18 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
     public synchronized List<V> findAll(Function<V, Optional<V>> filter) {
         List<V> result = new ArrayList<>();
         var jm = serializer;
+        var tx = beginTransaction();
         try {
-            MVMap<String, String> map = db.openMap(DB_FILE_NAME);
+            TransactionMap<String, String> map = tx.openMap(DB_FILE_NAME);
             if (map.firstKey() == null) {
                 return result;
             }
-            Cursor<String, String> it = map.cursor(map.firstKey());
+            Iterator<String> it = map.keyIterator(map.firstKey());
             while (it.hasNext()) {
-                it.next();
+                var key = it.next();
                 V val = null;
-                if (it.getValue() != null) {
-                    val = (V) jm.readValue(it.getValue(), valueClass);
+                if (map.get(key) != null) {
+                    val = (V) jm.readValue(map.get(key), valueClass);
                 }
                 if (filter == null) {
                     result.add(val);
@@ -185,19 +203,19 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
                     e.getCause(),
                     e.getMessage());
             throw new RuntimeException(e);
+        } finally {
+            tx.commit();
         }
     }
 
     @Override
     public synchronized boolean delete(K key) {
         var tx = beginTransaction();
-        try
-        {
+        try {
             var result = delete(key, tx);
             if (result) {
                 tx.commit();
-            }
-            else {
+            } else {
                 tx.rollback();
             }
             return result;
@@ -206,6 +224,7 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
             throw ex;
         }
     }
+
     @Override
     public synchronized boolean delete(K key, Transaction tx) {
         log.info("deleting key '{}'", key);
@@ -229,7 +248,6 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
 
     @Override
     public void close() {
-        ts.close();
         db.close();
     }
 

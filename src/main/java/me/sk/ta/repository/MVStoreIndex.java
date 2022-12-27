@@ -74,8 +74,9 @@ public class MVStoreIndex<K, V> {
             throw new IllegalArgumentException("indexKey");
         }
         List<V> result = new ArrayList<>();
-        MVMap<String, String> map = indexDb.openMap(indexName);
+        var tx = beginTransaction();
         try {
+            TransactionMap<String, String> map = tx.openMap(indexName);
             var ikd = serializer.writeValueAsString(desiredKey);
             Iterator<String> it = map.keyIterator(ikd);
             while (it.hasNext()) {
@@ -88,6 +89,8 @@ public class MVStoreIndex<K, V> {
             return result;
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
+        } finally {
+            tx.commit();
         }
     }
 
@@ -116,8 +119,7 @@ public class MVStoreIndex<K, V> {
 
     public synchronized boolean index(K key, V value) {
         var tx = beginTransaction();
-        try
-        {
+        try {
             var result = index(key, value, tx);
             if (result) {
                 tx.commit();
@@ -157,13 +159,11 @@ public class MVStoreIndex<K, V> {
 
     public synchronized boolean delete(K key, V indexValue) {
         var tx = beginTransaction();
-        try
-        {
+        try {
             var result = delete(key, indexValue, tx);
             if (result) {
                 tx.commit();
-            }
-            else {
+            } else {
                 tx.rollback();
             }
             return result;
@@ -248,12 +248,17 @@ public class MVStoreIndex<K, V> {
     }
 
     private Long GetPostfixCount() {
-        MVMap<Integer, Long> map = indexDb.openMap("indexName" + "-counter");
-        if (map.get(1) == null) {
-            map.put(1, 0L);
+        var tx = beginTransaction();
+        try {
+            TransactionMap<Integer, Long> map = tx.openMap(indexName + "-counter");
+            if (map.get(1) == null) {
+                map.put(1, 0L);
+            }
+            var val = map.get(1);
+            map.put(1, val + 1L);
+            return val;
+        } finally {
+            tx.commit();
         }
-        var val = map.get(1);
-        map.put(1, val + 1L);
-        return val;
     }
 }
