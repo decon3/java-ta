@@ -12,7 +12,7 @@ logging:
   level:
     .: INFO
     org.springframework: WARN
-    me.sk.ta: TRACE
+    me.sk.ta: INFO
   pattern:
     console: '%d{HH:mm:ss.SSS} %magenta([%thread]) %highlight(%-5level) %logger.%M\(\) - %msg%n'
     file: '%d{dd-MM-yyyy HH:mm:ss.SSS} [%thread] %-5level %logger.%M\(\) - %msg%n'

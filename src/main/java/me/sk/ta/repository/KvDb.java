@@ -9,6 +9,7 @@ import java.util.function.Function;
 public interface KvDb<K, V> {
 
     Optional<V> find(K key);
+    Optional<V> find(K key, Transaction tx);
 
     List<V> findAll(Function<V, Optional<V>> filter);
 

@@ -6,7 +6,6 @@ import me.sk.ta.domain.ADRating
 import me.sk.ta.domain.BreakoutPattern
 import me.sk.ta.domain.BuyAnalysis
 import me.sk.ta.domain.MarketTrend
-import me.sk.ta.domain.Stats
 import me.sk.ta.domain.Trade
 import me.sk.ta.domain.TradeContract
 import me.sk.ta.domain.TradingChargesCalculator
@@ -16,7 +15,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.context.assertj.ApplicationContextAssert
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.ContextConfiguration

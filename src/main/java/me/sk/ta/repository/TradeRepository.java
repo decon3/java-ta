@@ -158,7 +158,7 @@ public class TradeRepository {
                 tx3.rollback();
                 trade.ID = 0;
             }
-        } catch ( Exception ex ) {
+        } catch (Exception ex) {
             log.error("An exception occurred: {}", ex);
             if (tx1 != null) tx1.rollback();
             if (tx2 != null) tx2.rollback();
@@ -203,7 +203,7 @@ public class TradeRepository {
                 tx3.rollback();
                 return false;
             }
-        } catch ( Exception ex ) {
+        } catch (Exception ex) {
             log.error("An exception occurred: {}", ex);
             if (tx1 != null) tx1.rollback();
             if (tx2 != null) tx2.rollback();
@@ -227,13 +227,19 @@ public class TradeRepository {
     }
 
     private int getNextId() {
-        var counter = countersDb.find(TRADE_KEY_COUNTER);
         var newValue = 1;
-        if (counter.isPresent()) {
-            newValue = counter.get();
-            newValue += 1;
+        var tx = countersDb.beginTransaction();
+        try {
+            var counter = countersDb.find(TRADE_KEY_COUNTER, tx);
+            if (counter.isPresent()) {
+                newValue = counter.get();
+                newValue += 1;
+            }
+            countersDb.save(TRADE_KEY_COUNTER, newValue, tx);
+            tx.commit();
+        } catch (Exception ex) {
+            tx.rollback();
         }
-        countersDb.save(TRADE_KEY_COUNTER, newValue);
         return newValue;
     }
 }

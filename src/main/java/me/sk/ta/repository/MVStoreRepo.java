@@ -2,8 +2,6 @@ package me.sk.ta.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.h2.mvstore.Cursor;
-import org.h2.mvstore.MVMap;
 import org.h2.mvstore.MVStore;
 import org.h2.mvstore.MVStoreException;
 import org.h2.mvstore.tx.Transaction;
@@ -123,7 +121,7 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
             var kd = serializer.writeValueAsString(key);
             if (map.containsKey(key)) {
                 var value = map.get(kd);
-                log.info("finding key '{}' returns '{}'", key, value);
+                log.trace("get key '{}' returns '{}'", key, value);
                 if (value == null) {
                     return null;
                 } else {
@@ -152,7 +150,7 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
         try {
             TransactionMap<String, String> map = tx.openMap(DB_FILE_NAME);
             var value = map.get(serializer.writeValueAsString(key));
-            log.info("finding key '{}' returns '{}'", key, value);
+            log.trace("finding key '{}' returns '{}'", key, value);
             if (value == null) {
                 return Optional.empty();
             } else {
@@ -167,6 +165,27 @@ public class MVStoreRepo<K, V> implements KvDb<K, V> {
             throw new RuntimeException(e);
         } finally {
             tx.commit();
+        }
+    }
+
+    @Override
+    public synchronized Optional<V> find(K key, Transaction tx) {
+        try {
+            TransactionMap<String, String> map = tx.openMap(DB_FILE_NAME);
+            var value = map.get(serializer.writeValueAsString(key));
+            log.trace("found key '{}' returns '{}'", key, value);
+            if (value == null) {
+                return Optional.empty();
+            } else {
+                return Optional.of((V) serializer.readValue(value, valueClass));
+            }
+        } catch (JsonProcessingException e) {
+            log.error(
+                    "Error retrieving the entry with key: {}, cause: {}, message: {}",
+                    key,
+                    e.getCause(),
+                    e.getMessage());
+            throw new RuntimeException(e);
         }
     }
 
