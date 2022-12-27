@@ -1,4 +1,4 @@
-package me.sk.ta.repository;
+package me.sk.ta.repositories;
 
 import org.h2.mvstore.tx.Transaction;
 

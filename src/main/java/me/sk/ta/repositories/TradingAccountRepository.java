@@ -1,4 +1,4 @@
-package me.sk.ta.repository;
+package me.sk.ta.repositories;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import me.sk.ta.domain.Trade;

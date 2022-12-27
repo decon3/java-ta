@@ -1,4 +1,4 @@
-package me.sk.ta.repository
+package me.sk.ta.repositories
 
 import me.sk.ta.domain.Utils
 import spock.lang.Specification
