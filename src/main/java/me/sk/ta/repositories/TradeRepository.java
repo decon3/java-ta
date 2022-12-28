@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 @Component
-public class TradeRepository {
+public class TradeRepository implements me.sk.ta.api.interfaces.TradeRepository, AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TradeRepository.class);
 
     final String TRADE_KEY_COUNTER = "TRADE_ID_COUNTER";
@@ -40,6 +40,7 @@ public class TradeRepository {
         countersDb = new MVStoreRepo<String, Integer>(dbPath, "counters", String.class, Integer.class, serializer);
     }
 
+    @Override
     public Trade find(int id) {
         if (id < 1) {
             throw new IllegalArgumentException("id");
@@ -47,6 +48,7 @@ public class TradeRepository {
         return db.get(id);
     }
 
+    @Override
     public Optional<Trade> get(int id) {
         if (id < 1) {
             throw new IllegalArgumentException("id");
@@ -54,12 +56,14 @@ public class TradeRepository {
         return db.find(id);
     }
 
+    @Override
     public List<Trade> where(Predicate<Trade> predicate) {
         return db.findAll(x -> {
             return predicate.test(x) ? Optional.of(x) : Optional.empty();
         });
     }
 
+    @Override
     public Optional<Trade> getOpenTrade(String symbol) {
         if (symbol == null || symbol.isBlank()) {
             throw new IllegalArgumentException("symbol");
@@ -83,12 +87,14 @@ public class TradeRepository {
             return t;
     }
 
+    @Override
     public List<Trade> getOpenTrades() {
         return db.findAll(x -> {
             return x.isClosed() ? Optional.empty() : Optional.of(x);
         });
     }
 
+    @Override
     public List<Trade> getClosedTrades(LocalDate from, LocalDate to) {
         return db.findAll(x -> {
             var date = x.getDateOfClosure();
@@ -102,6 +108,7 @@ public class TradeRepository {
         });
     }
 
+    @Override
     public List<Trade> getClosedTrades() {
         return db.findAll(x -> {
             return x.isClosed() ? Optional.of(x) : Optional.empty();
@@ -109,6 +116,7 @@ public class TradeRepository {
     }
 
 
+    @Override
     public int saveOrUpdate(Trade trade) {
         if (trade == null) {
             throw new IllegalArgumentException("trade");
@@ -169,6 +177,7 @@ public class TradeRepository {
         return trade.ID;
     }
 
+    @Override
     public boolean delete(int id) {
         if (id < 1) {
             throw new IllegalArgumentException("id");
@@ -212,7 +221,9 @@ public class TradeRepository {
         }
     }
 
+    @Override
     public void close() {
+        log.info("Closing the db and the indices");
         db.close();
         countersDb.close();
         symbolIndex.close();

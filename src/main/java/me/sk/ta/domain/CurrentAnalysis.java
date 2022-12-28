@@ -65,7 +65,8 @@ public class CurrentAnalysis extends AnalysisAbstract {
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
         CurrentAnalysis that = (CurrentAnalysis) o;
-        return Double.compare(that.price, price) == 0 && date.equals(that.date);
+        return Double.compare(that.price, price) == 0 &&
+                date.equals(that.date);
     }
 
     @Override

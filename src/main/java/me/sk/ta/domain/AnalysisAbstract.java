@@ -1,6 +1,7 @@
 package me.sk.ta.domain;
 
 import lombok.Getter;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.util.Objects;
@@ -11,6 +12,7 @@ public abstract class AnalysisAbstract {
     protected double alpha;
     protected double beta;
     protected double debt;
+    @Setter
     protected double stopLoss;
     protected double dma20;
     protected double dma50;
@@ -24,6 +26,7 @@ public abstract class AnalysisAbstract {
 
     protected Trend adTrend;
     protected boolean adPositive;
+    @Setter
     protected String comments;
 
     protected int wonMasterRating;
@@ -41,6 +44,7 @@ public abstract class AnalysisAbstract {
     protected int guruScoreBg;
     // James O'Shauganessy
     protected int guruScoreJos;
+    @Setter
     protected MarketTrend marketTrend;
     protected double increaseInFunds;
     protected double increaseInFundHoldings;
