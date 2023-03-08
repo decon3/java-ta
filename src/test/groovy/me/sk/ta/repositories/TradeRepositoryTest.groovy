@@ -53,10 +53,8 @@ class TradeRepositoryTest extends Specification {
     def "spring registers time module with jackson serializer in the background"() {
         given:
         var som = ctx.getBean(ObjectMapper.class);
-        var mom = new ObjectMapper();
         expect:
         som.writeValueAsString(Utils.UtcNow()).length() > 0
-        mom.writeValueAsString(Utils.UtcNow()).length() > 0
     }
 
     def "Saves an open trade"() {

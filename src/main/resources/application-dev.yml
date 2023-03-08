@@ -11,7 +11,7 @@ server:
 logging:
   level:
     .: INFO
-    org.springframework: WARN
+    org.springframework: TRACE
     me.sk.ta: INFO
   pattern:
     console: '%d{HH:mm:ss.SSS} %magenta([%thread]) %highlight(%-5level) %logger.%M\(\) - %msg%n'

@@ -17,4 +17,5 @@ public class TradingRatesConfiguration {
     public double IntraDaySebiFee = 0.0000325;
     public double SebiFee = 0.0000325;
     public double GstRate = 0.18;
+    public String Version = "2022-12-31";
 }

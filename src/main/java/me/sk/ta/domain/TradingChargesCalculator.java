@@ -1,11 +1,13 @@
 package me.sk.ta.domain;
 
+import lombok.Getter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public class TradingChargesCalculator {
     @Autowired
+    @Getter
     TradingRatesConfiguration rates;
 
     public TradeCharges calculatePriceAndCost(double price, boolean isIntraDay, boolean isSale) {
@@ -20,7 +22,7 @@ public class TradingChargesCalculator {
         tc.stampDuty(tc.stampDuty() < 100 ? tc.stampDuty() : 100);
         tc.stt(isIntraDay ? (price * rates.IntraDaySttRate) : (price * rates.SttRate));
         if (isIntraDay && isSale == false) {
-            // stt charged only on sales for intraday
+            // stt is not charged for intraday purchases
             tc.stt(0.00);
         }
         tc.roundoff();

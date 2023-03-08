@@ -21,3 +21,4 @@ ta.rates:
     intra-day-sebi-fee:  0.0000325
     sebi-fee:  0.0000325
     gst-rate:  0.18
+    version: "2022-12-31"
